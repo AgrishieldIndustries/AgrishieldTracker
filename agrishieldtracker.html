@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="theme-color" content="#173404"/>
+  <title>AgriShield Field Tracker — Admin Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Syne:wght@600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green-50: #EAF3DE; --green-100: #C0DD97; --green-200: #97C459;
+      --green-400: #639922; --green-600: #3B6D11; --green-800: #27500A; --green-900: #173404;
+      --amber-50: #FAEEDA; --amber-100: #FAC775; --amber-400: #BA7517;
+      --red-400: #E24B4A; --red-50: #FCEBEB;
+      --bg: #f5f5f0; --white: #ffffff; --border: rgba(0,0,0,0.09);
+      --text: #1a1a1a; --muted: #6b7280;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); min-height: 100vh; display: flex; }
+    .sidebar { width: 220px; flex-shrink: 0; background: var(--green-900); display: flex; flex-direction: column; min-height: 100vh; position: sticky; top: 0; }
+    .sidebar-logo { padding: 22px 18px 16px; border-bottom: 0.5px solid rgba(255,255,255,0.1); }
+    .logo-text { font-family: 'Syne', sans-serif; font-size: 19px; font-weight: 700; color: var(--green-100); }
+    .logo-sub { font-size: 10px; color: var(--green-200); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 3px; }
+    .sidebar-section { padding: 16px 0 4px; }
+    .sidebar-section-label { font-size: 9px; letter-spacing: 1.8px; text-transform: uppercase; color: rgba(255,255,255,0.35); padding: 0 18px 8px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 18px; cursor: pointer; font-size: 13px; color: rgba(255,255,255,0.65); border-left: 2px solid transparent; transition: all 0.15s; }
+    .nav-item:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.9); }
+    .nav-item.active { background: rgba(99,153,34,0.25); color: var(--green-100); border-left-color: var(--green-200); }
+    .nav-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.7; flex-shrink: 0; }
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar { background: var(--white); border-bottom: 0.5px solid var(--border); padding: 0 24px; height: 54px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+    .topbar-left { display: flex; align-items: center; gap: 14px; }
+    .page-title { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 600; color: var(--text); }
+    .date-badge { font-size: 11px; color: var(--muted); background: var(--bg); padding: 4px 10px; border-radius: 20px; border: 0.5px solid var(--border); }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .live-badge { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--green-600); background: var(--green-50); padding: 4px 10px; border-radius: 20px; border: 0.5px solid var(--green-100); }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-400); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .admin-chip { display: flex; align-items: center; gap: 8px; }
+    .admin-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--green-400); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: #fff; }
+    .content { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+    .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .stat-card { background: var(--white); border: 0.5px solid var(--border); border-radius: 10px; padding: 14px 16px; position: relative; overflow: hidden; }
+    .stat-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 3px 0 0 3px; }
+    .stat-card.green::before { background: var(--green-400); }
+    .stat-card.amber::before { background: var(--amber-400); }
+    .stat-card.blue::before { background: #378ADD; }
+    .stat-card.red::before { background: var(--red-400); }
+    .stat-label { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .stat-value { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 700; color: var(--text); }
+    .stat-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .mid-row { display: grid; grid-template-columns: 1fr 320px; gap: 16px; }
+    .map-card { background: var(--white); border: 0.5px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 0.5px solid var(--border); }
+    .card-title { font-size: 13px; font-weight: 500; color: var(--text); }
+    .card-badge { font-size: 10px; padding: 3px 8px; border-radius: 20px; background: var(--green-50); color: var(--green-800); border: 0.5px solid var(--green-100); }
+    .map-container { height: 280px; }
+    #map { width: 100%; height: 100%; z-index: 1; }
+    .attendance-card { background: var(--white); border: 0.5px solid var(--border); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+    .attendance-list { flex: 1; overflow-y: auto; max-height: 320px; }
+    .attendance-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 0.5px solid var(--border); transition: background 0.1s; }
+    .attendance-item:hover { background: var(--bg); }
+    .attendance-item:last-child { border-bottom: none; }
+    .emp-avatar { width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; background: var(--green-50); color: var(--green-800); }
+    .emp-info { flex: 1; }
+    .emp-name { font-size: 12px; font-weight: 500; color: var(--text); }
+    .emp-time { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .status-dot.in { background: var(--green-400); }
+    .status-dot.out { background: var(--red-400); }
+    .empty-state { padding: 30px; text-align: center; color: var(--muted); font-size: 13px; }
+    .loading-state { padding: 30px; text-align: center; color: var(--muted); font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .spin { width: 16px; height: 16px; border: 2px solid var(--green-100); border-top-color: var(--green-400); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .table-card { background: var(--white); border: 0.5px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .data-table th { background: var(--bg); padding: 9px 12px; text-align: left; font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: var(--muted); font-weight: 500; border-bottom: 0.5px solid var(--border); }
+    .data-table td { padding: 9px 12px; border-bottom: 0.5px solid var(--border); color: var(--text); }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--bg); }
+    .green-pill { display: inline-block; padding: 2px 8px; border-radius: 20px; background: var(--green-50); color: var(--green-800); font-size: 11px; font-weight: 500; }
+    .red-pill { display: inline-block; padding: 2px 8px; border-radius: 20px; background: var(--red-50); color: #791F1F; font-size: 11px; font-weight: 500; }
+    .coords-pill { display: inline-block; padding: 2px 8px; border-radius: 20px; background: #E6F1FB; color: #0C447C; font-size: 10px; font-family: monospace; }
+    .activity-row { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; padding: 14px 16px; }
+    .act-cell { text-align: center; }
+    .act-label { font-size: 10px; color: var(--muted); margin-bottom: 5px; }
+    .act-value { font-size: 18px; font-weight: 700; font-family: 'Syne', sans-serif; color: var(--text); }
+    .act-value.highlight { color: var(--green-600); }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: var(--green-800); color: white; padding: 12px 20px; border-radius: 12px; font-size: 13px; font-weight: 500; z-index: 9999; transform: translateY(80px); transition: transform 0.3s ease; }
+    .toast.show { transform: translateY(0); }
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .stat-row { grid-template-columns: repeat(2, 1fr); }
+      .mid-row { grid-template-columns: 1fr; }
+      .activity-row { grid-template-columns: repeat(4, 1fr); }
+    }
+  </style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-text">AgriShield</div>
+    <div class="logo-sub">Field Tracker</div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Main</div>
+    <div class="nav-item active"><div class="nav-dot"></div> Dashboard</div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Reports</div>
+    <div class="nav-item"><div class="nav-dot"></div> Track Activity</div>
+    <div class="nav-item"><div class="nav-dot"></div> GPS Report</div>
+    <div class="nav-item"><div class="nav-dot"></div> Attendance</div>
+    <div class="nav-item"><div class="nav-dot"></div> Day Report</div>
+    <div class="nav-item"><div class="nav-dot"></div> Download</div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Operations</div>
+    <div class="nav-item"><div class="nav-dot"></div> Order Book</div>
+    <div class="nav-item"><div class="nav-dot"></div> Payment Mgmt</div>
+    <div class="nav-item"><div class="nav-dot"></div> Beat Planning</div>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Management</div>
+    <div class="nav-item"><div class="nav-dot"></div> Employee Mgmt</div>
+    <div class="nav-item"><div class="nav-dot"></div> HRMS</div>
+    <div class="nav-item"><div class="nav-dot"></div> TA / DA</div>
+    <div class="nav-item"><div class="nav-dot"></div> Agency Mgmt</div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="page-title">Dashboard</div>
+      <div class="date-badge" id="today-date"></div>
+    </div>
+    <div class="topbar-right">
+      <div class="live-badge"><div class="live-dot"></div> Live</div>
+      <div class="admin-chip">
+        <div class="admin-avatar">A</div>
+        <span style="font-size:12px;color:var(--muted)">agrishield-admin</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="stat-row">
+      <div class="stat-card green">
+        <div class="stat-label">Checked In Today</div>
+        <div class="stat-value" id="statIn">—</div>
+        <div class="stat-sub">Active in field</div>
+      </div>
+      <div class="stat-card amber">
+        <div class="stat-label">Pending Day Out</div>
+        <div class="stat-value" id="statPending">—</div>
+        <div class="stat-sub">Still working</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">Checked Out</div>
+        <div class="stat-value" id="statOut">—</div>
+        <div class="stat-sub">Completed today</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">Avg Hours Today</div>
+        <div class="stat-value" id="statAvg">—</div>
+        <div class="stat-sub">Completed employees</div>
+      </div>
+    </div>
+
+    <div class="mid-row">
+      <div class="map-card">
+        <div class="card-header">
+          <div class="card-title">Live Field Map</div>
+          <div class="card-badge" id="mapBadge">Loading...</div>
+        </div>
+        <div class="map-container"><div id="map"></div></div>
+      </div>
+      <div class="attendance-card">
+        <div class="card-header">
+          <div class="card-title">Today's Attendance</div>
+          <div class="card-badge">Live</div>
+        </div>
+        <div class="attendance-list" id="attendanceList">
+          <div class="loading-state"><div class="spin"></div> Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="card-header">
+        <div class="card-title">GPS Check-in Log</div>
+        <div class="card-badge">Today — live</div>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>#</th><th>Employee</th><th>Day In</th><th>GPS (In)</th><th>Day Out</th><th>Hours</th><th>Status</th></tr>
+        </thead>
+        <tbody id="gpsTable">
+          <tr><td colspan="7"><div class="loading-state"><div class="spin"></div> Loading...</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="table-card">
+      <div class="card-header">
+        <div class="card-title">Daily Activity Summary</div>
+        <div class="card-badge" id="activityDate"></div>
+      </div>
+      <div class="activity-row">
+        <div class="act-cell"><div class="act-label">Total In</div><div class="act-value highlight" id="actIn">0</div></div>
+        <div class="act-cell"><div class="act-label">Checked Out</div><div class="act-value" id="actOut">0</div></div>
+        <div class="act-cell"><div class="act-label">Still Active</div><div class="act-value" id="actPending">0</div></div>
+        <div class="act-cell"><div class="act-label">Avg Hours</div><div class="act-value" id="actAvgHours">—</div></div>
+        <div class="act-cell"><div class="act-label">First In</div><div class="act-value" style="font-size:13px" id="actFirstIn">—</div></div>
+        <div class="act-cell"><div class="act-label">Last In</div><div class="act-value" style="font-size:13px" id="actLastIn">—</div></div>
+        <div class="act-cell"><div class="act-label">GPS Logged</div><div class="act-value highlight" id="actGPS">0</div></div>
+        <div class="act-cell"><div class="act-label">Last Sync</div><div class="act-value" style="font-size:12px" id="actSync">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, query, where, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAJ_wGlfaLhPlGm4Ami1nPj7aPIRaYQRGY",
+    authDomain: "agrishieldtracker.firebaseapp.com",
+    projectId: "agrishieldtracker",
+    storageBucket: "agrishieldtracker.firebasestorage.app",
+    messagingSenderId: "799439813954",
+    appId: "1:799439813954:web:0f82f90c45eca934df9cdb",
+    measurementId: "G-D4BLPYK9L3"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  const now = new Date();
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const shortMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('today-date').textContent = days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate() + ', ' + now.getFullYear();
+  document.getElementById('activityDate').textContent = shortMonths[now.getMonth()] + ' ' + now.getDate() + ', ' + now.getFullYear();
+  const todayStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+
+  const map = L.map('map').setView([18.5204, 73.8567], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 18 }).addTo(map);
+  let markers = [];
+
+  function clearMarkers() { markers.forEach(m => map.removeLayer(m)); markers = []; }
+  function addMarker(lat, lng, name, timeIn, isOut) {
+    const color = isOut ? '#E24B4A' : '#3B6D11';
+    const icon = L.divIcon({ className: '', html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2.5px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.3)"></div>`, iconSize: [14,14], iconAnchor: [7,7] });
+    const m = L.marker([parseFloat(lat), parseFloat(lng)], { icon }).addTo(map)
+      .bindPopup(`<strong>${name}</strong><br><small>In: ${timeIn} · ${isOut ? 'Checked Out' : 'Active'}</small>`);
+    markers.push(m);
+  }
+
+  function getInitials(name) { return name ? name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase() : 'NA'; }
+  function formatTime(ts) {
+    if (!ts) return '—';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  }
+  function calcHours(inTs, outTs) {
+    if (!inTs || !outTs) return '—';
+    const tin = inTs.toDate ? inTs.toDate() : new Date(inTs);
+    const tout = outTs.toDate ? outTs.toDate() : new Date(outTs);
+    const s = Math.floor((tout-tin)/1000);
+    return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m';
+  }
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  const q = query(collection(db,'attendance'), where('date','==',todayStr), orderBy('dayInTime','desc'));
+  onSnapshot(q, (snapshot) => {
+    const records = [];
+    snapshot.forEach(doc => records.push({ id: doc.id, ...doc.data() }));
+
+    const totalIn = records.length;
+    const checkedOut = records.filter(r => r.dayOutTime).length;
+    const pending = totalIn - checkedOut;
+    const withGPS = records.filter(r => r.dayInLat).length;
+
+    document.getElementById('statIn').textContent = totalIn;
+    document.getElementById('statPending').textContent = pending;
+    document.getElementById('statOut').textContent = checkedOut;
+    document.getElementById('mapBadge').textContent = totalIn + ' tracked today';
+
+    const completed = records.filter(r => r.dayInTime && r.dayOutTime);
+    let avgText = '—';
+    if (completed.length > 0) {
+      const avgMs = completed.reduce((sum,r) => {
+        const tin = r.dayInTime?.toDate ? r.dayInTime.toDate() : new Date(r.dayInTime);
+        const tout = r.dayOutTime?.toDate ? r.dayOutTime.toDate() : new Date(r.dayOutTime);
+        return sum + (tout - tin);
+      }, 0) / completed.length;
+      avgText = Math.floor(avgMs/3600000)+'h '+Math.floor((avgMs%3600000)/60000)+'m';
+    }
+    document.getElementById('statAvg').textContent = avgText;
+    document.getElementById('actIn').textContent = totalIn;
+    document.getElementById('actOut').textContent = checkedOut;
+    document.getElementById('actPending').textContent = pending;
+    document.getElementById('actAvgHours').textContent = avgText;
+    document.getElementById('actGPS').textContent = withGPS;
+    document.getElementById('actSync').textContent = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+
+    if (records.length > 0) {
+      const sorted = [...records].sort((a,b) => {
+        const ta = a.dayInTime?.toDate ? a.dayInTime.toDate() : new Date(a.dayInTime||0);
+        const tb = b.dayInTime?.toDate ? b.dayInTime.toDate() : new Date(b.dayInTime||0);
+        return ta - tb;
+      });
+      document.getElementById('actFirstIn').textContent = formatTime(sorted[0].dayInTime);
+      document.getElementById('actLastIn').textContent = formatTime(sorted[sorted.length-1].dayInTime);
+    }
+
+    document.getElementById('attendanceList').innerHTML = records.length === 0
+      ? '<div class="empty-state">No check-ins yet today</div>'
+      : records.map(r => `<div class="attendance-item"><div class="emp-avatar">${getInitials(r.employeeName)}</div><div class="emp-info"><div class="emp-name">${r.employeeName||'Unknown'}</div><div class="emp-time">In: ${formatTime(r.dayInTime)}${r.dayOutTime?' · Out: '+formatTime(r.dayOutTime):' · Active'}</div></div><div class="status-dot ${r.dayOutTime?'out':'in'}"></div></div>`).join('');
+
+    document.getElementById('gpsTable').innerHTML = records.length === 0
+      ? '<tr><td colspan="7"><div class="empty-state">No records yet — employees need to check in via the app</div></td></tr>'
+      : records.map((r,i) => `<tr><td>${i+1}</td><td><strong>${r.employeeName||'Unknown'}</strong></td><td>${formatTime(r.dayInTime)}</td><td>${r.dayInLat?`<span class="coords-pill">${parseFloat(r.dayInLat).toFixed(4)}, ${parseFloat(r.dayInLng).toFixed(4)}</span>`:'—'}</td><td>${r.dayOutTime?formatTime(r.dayOutTime):'—'}</td><td>${calcHours(r.dayInTime,r.dayOutTime)}</td><td>${r.dayOutTime?'<span class="red-pill">Completed</span>':'<span class="green-pill">Active</span>'}</td></tr>`).join('');
+
+    clearMarkers();
+    const bounds = [];
+    records.forEach(r => {
+      if (r.dayInLat && r.dayInLng) {
+        addMarker(r.dayInLat, r.dayInLng, r.employeeName||'Employee', formatTime(r.dayInTime), !!r.dayOutTime);
+        bounds.push([parseFloat(r.dayInLat), parseFloat(r.dayInLng)]);
+      }
+    });
+    if (bounds.length > 0) map.fitBounds(bounds, { padding: [30,30] });
+
+    showToast('Live update — ' + totalIn + ' employee' + (totalIn!==1?'s':'') + ' today');
+  }, (err) => {
+    console.error(err);
+    document.getElementById('attendanceList').innerHTML = '<div class="empty-state">Error loading data. Check Firestore rules.</div>';
+  });
+</script>
+</body>
+</html>
